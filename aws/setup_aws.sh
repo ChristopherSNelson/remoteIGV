@@ -7,21 +7,20 @@ set -euo pipefail
 # Safe to re-run — skips resources that already exist.
 #
 # Usage: ./setup_aws.sh
+#    or: REMOTEIGV_REGION=eu-west-1 REMOTEIGV_BUCKET=my-bucket ./setup_aws.sh
 #
 
-REGION="us-east-2"
-BUCKET="remoteigv-data"
-KEY_NAME="remoteigv-key"
-ROLE_NAME="remoteIGV-EC2-S3Read"
-SG_NAME="remoteigv-sg"
-PORT=8080
+source "$(dirname "$0")/config.sh"
 
 echo "========================================="
 echo " remoteIGV — AWS Setup"
 echo " Region: $REGION"
 echo "========================================="
 
-ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+if ! ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text 2>/dev/null); then
+  echo "ERROR: AWS CLI not configured. Run 'aws configure' first." >&2
+  exit 1
+fi
 echo "Account: $ACCOUNT_ID"
 
 # ---------- S3 Bucket ----------
@@ -31,8 +30,13 @@ echo "[1/4] S3 bucket..."
 if aws s3api head-bucket --bucket "$BUCKET" --region "$REGION" 2>/dev/null; then
   echo "  s3://$BUCKET exists"
 else
-  aws s3 mb "s3://$BUCKET" --region "$REGION"
-  echo "  s3://$BUCKET created"
+  if aws s3 mb "s3://$BUCKET" --region "$REGION" 2>/dev/null; then
+    echo "  s3://$BUCKET created"
+  else
+    echo "ERROR: Could not create s3://$BUCKET — name may be taken globally." >&2
+    echo "  Try: REMOTEIGV_BUCKET=your-unique-name ./setup_aws.sh" >&2
+    exit 1
+  fi
 fi
 
 # ---------- IAM Role ----------
@@ -97,6 +101,12 @@ echo "[3/4] Security group..."
 DEFAULT_VPC=$(aws ec2 describe-vpcs --filters Name=isDefault,Values=true \
   --query 'Vpcs[0].VpcId' --output text --region "$REGION")
 
+if [ "$DEFAULT_VPC" = "None" ] || [ -z "$DEFAULT_VPC" ]; then
+  echo "ERROR: No default VPC found in $REGION." >&2
+  echo "  Create one with: aws ec2 create-default-vpc --region $REGION" >&2
+  exit 1
+fi
+
 SG_ID=$(aws ec2 describe-security-groups --region "$REGION" \
   --filters "Name=group-name,Values=$SG_NAME" "Name=vpc-id,Values=$DEFAULT_VPC" \
   --query 'SecurityGroups[0].GroupId' --output text 2>/dev/null || echo "None")
@@ -113,7 +123,12 @@ else
   echo "  SG exists: $SG_ID"
 fi
 
-MY_IP=$(curl -s https://checkip.amazonaws.com)/32
+if ! MY_IP=$(curl -sf --max-time 5 https://checkip.amazonaws.com); then
+  echo "ERROR: Could not determine your public IP." >&2
+  exit 1
+fi
+MY_IP="${MY_IP}/32"
+
 for P in 22 $PORT; do
   aws ec2 authorize-security-group-ingress --group-id "$SG_ID" --region "$REGION" \
     --protocol tcp --port "$P" --cidr "$MY_IP" 2>/dev/null || true
@@ -124,10 +139,16 @@ echo "  Ingress rules set for $MY_IP (ports 22, $PORT)"
 echo ""
 echo "[4/4] SSH key pair..."
 
-KEY_FILE="$HOME/.ssh/${KEY_NAME}.pem"
 if aws ec2 describe-key-pairs --key-names "$KEY_NAME" --region "$REGION" &>/dev/null; then
   echo "  Key pair $KEY_NAME exists"
-  [ -f "$KEY_FILE" ] && echo "  Key file: $KEY_FILE" || echo "  WARNING: $KEY_FILE not found locally"
+  if [ ! -f "$KEY_FILE" ]; then
+    echo "  WARNING: $KEY_FILE not found locally."
+    echo "  If you lost this key, delete and recreate:"
+    echo "    aws ec2 delete-key-pair --key-name $KEY_NAME --region $REGION"
+    echo "    Re-run this script."
+  else
+    echo "  Key file: $KEY_FILE"
+  fi
 else
   mkdir -p "$HOME/.ssh"
   aws ec2 create-key-pair --key-name "$KEY_NAME" --region "$REGION" \

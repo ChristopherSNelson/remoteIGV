@@ -21,23 +21,21 @@
   .toolbar button:hover { background: var(--highlight); color: #fff; }
   .toolbar .sep { width: 1px; height: 24px; background: var(--accent); }
 
-  #locus-input { width: 220px; }
+  #locus-input { width: 260px; }
   #file-select { max-width: 300px; }
 
   .igv-container { margin: 0; }
-
-  /* make IGV tracks have a dark background */
   .igv-root-div { background: #fff !important; }
 
-  #snapshot-bar {
+  #bottom-bar {
     background: var(--surface); padding: 10px 20px; display: flex; align-items: center; gap: 12px;
-    border-top: 1px solid var(--accent); position: sticky; bottom: 0;
+    border-top: 1px solid var(--accent); position: sticky; bottom: 0; flex-wrap: wrap;
   }
-  #snapshot-bar button { font-size: 14px; padding: 8px 18px; border-radius: 4px; border: 1px solid var(--highlight); background: var(--highlight); color: #fff; cursor: pointer; font-weight: 600; }
-  #snapshot-bar button:hover { background: #3d8a96; }
-  #snapshot-bar .status { font-size: 12px; color: #888; }
+  #bottom-bar button { font-size: 13px; padding: 7px 14px; border-radius: 4px; border: 1px solid var(--highlight); background: var(--highlight); color: #fff; cursor: pointer; font-weight: 600; }
+  #bottom-bar button:hover { background: #3d8a96; }
+  #bottom-bar .status { font-size: 12px; color: #888; flex: 1; }
+  #share-input { font-size: 12px; width: 400px; max-width: 40vw; padding: 5px 8px; background: var(--bg); color: var(--text); border: 1px solid var(--accent); border-radius: 4px; }
 
-  .file-list { max-height: 180px; overflow-y: auto; font-size: 12px; }
   .file-chip {
     display: inline-flex; align-items: center; gap: 4px; background: var(--accent); padding: 3px 8px;
     border-radius: 3px; margin: 2px; font-size: 12px;
@@ -59,9 +57,10 @@
   <div class="sep"></div>
 
   <label>Add track:
-    <select id="file-select"><option value="">— load files —</option></select>
+    <select id="file-select"><option value="">-- select file --</option></select>
   </label>
   <button id="add-track-btn">+ Add</button>
+  <button id="add-all-btn">+ All BAMs</button>
 
   <div class="sep"></div>
   <span id="loaded-tracks" class="file-chip-area"></span>
@@ -69,9 +68,11 @@
 
 <div id="igv-div" class="igv-container"></div>
 
-<div id="snapshot-bar">
+<div id="bottom-bar">
   <button id="snap-svg">Download SVG</button>
   <button id="snap-png">Download PNG</button>
+  <button id="share-btn">Share link</button>
+  <input id="share-input" type="text" readonly hidden>
   <span class="status" id="snap-status"></span>
 </div>
 
@@ -79,12 +80,47 @@
 // ── state ──────────────────────────────────────────────────────
 let browser = null;
 const loadedTracks = new Set();
+let allFiles = [];
+
+// ── URL params ─────────────────────────────────────────────────
+function getUrlParams() {
+  const p = new URLSearchParams(window.location.search);
+  return {
+    locus: p.get('locus'),
+    tracks: p.get('tracks') ? p.get('tracks').split(',') : null,
+  };
+}
+
+function buildShareUrl() {
+  const base = window.location.origin + window.location.pathname;
+  const params = new URLSearchParams();
+  // get current locus from IGV
+  if (browser) {
+    const loci = browser.currentLoci();
+    if (loci && loci.length) params.set('locus', loci[0]);
+  }
+  if (loadedTracks.size > 0) {
+    params.set('tracks', [...loadedTracks].join(','));
+  }
+  return base + '?' + params.toString();
+}
+
+function updateUrlQuietly() {
+  const url = buildShareUrl();
+  history.replaceState(null, '', url);
+}
 
 // ── init IGV ───────────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', async () => {
+  const params = getUrlParams();
+
+  // set locus from URL param or keep default
+  const locusInput = document.getElementById('locus-input');
+  if (params.locus) locusInput.value = params.locus;
+
   const options = {
     genome: "hg38",
-    locus: document.getElementById('locus-input').value,
+    locus: locusInput.value,
     tracks: [
       {
         name: "ENCODE cCREs",
@@ -117,18 +153,34 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   browser = await igv.createBrowser(document.getElementById('igv-div'), options);
 
-  // populate file picker and auto-load all tracks
+  // update URL when user navigates
+  browser.on('locuschange', () => {
+    const loci = browser.currentLoci();
+    if (loci && loci.length) {
+      locusInput.value = loci[0];
+      updateUrlQuietly();
+    }
+  });
+
+  // populate file picker
   await loadFileList();
-  await autoLoadTracks();
+
+  // load tracks from URL params, or auto-load all
+  if (params.tracks) {
+    for (const t of params.tracks) {
+      await addTrackByPath(t);
+    }
+  } else {
+    await autoLoadTracks();
+  }
 });
 
 // ── file list ─────────────────────────────────────────────────
 async function loadFileList() {
   const resp = await fetch('/api/files');
-  const files = await resp.json();
+  allFiles = await resp.json();
   const sel = document.getElementById('file-select');
-  for (const f of files) {
-    // skip index files in the picker
+  for (const f of allFiles) {
     if (/\.(bai|crai|csi|tbi|idx)$/i.test(f.name)) continue;
     const opt = document.createElement('option');
     opt.value = f.path;
@@ -142,11 +194,77 @@ async function autoLoadTracks() {
   const sel = document.getElementById('file-select');
   for (const opt of sel.options) {
     if (!opt.value) continue;
-    sel.value = opt.value;
-    document.getElementById('add-track-btn').click();
-    // small delay to let each track initialize
-    await new Promise(r => setTimeout(r, 100));
+    await addTrackByPath(opt.value);
   }
+}
+
+// ── track loading ─────────────────────────────────────────────
+function buildTrackConfig(filePath) {
+  const url = '/data/' + filePath;
+  const lower = filePath.toLowerCase();
+  const name = filePath.split('/').pop();
+  const config = { name, url };
+
+  if (lower.endsWith('.bam')) {
+    config.type = 'alignment';
+    config.format = 'bam';
+    config.indexURL = url + '.bai';
+  } else if (lower.endsWith('.cram')) {
+    config.type = 'alignment';
+    config.format = 'cram';
+    config.indexURL = url + '.crai';
+  } else if (lower.endsWith('.vcf.gz')) {
+    config.type = 'variant';
+    config.format = 'vcf';
+    config.indexURL = url + '.tbi';
+  } else if (lower.endsWith('.bed.gz')) {
+    config.type = 'annotation';
+    config.format = 'bed';
+    config.indexURL = url + '.tbi';
+  } else if (lower.endsWith('.bed')) {
+    config.type = 'annotation';
+    config.format = 'bed';
+    config.displayMode = 'EXPANDED';
+  } else if (lower.endsWith('.bedgraph')) {
+    config.type = 'wig';
+    config.format = 'bedgraph';
+  } else if (lower.endsWith('.bw') || lower.endsWith('.bigwig')) {
+    config.type = 'wig';
+    config.format = 'bigwig';
+  } else if (lower.endsWith('.gtf.gz') || lower.endsWith('.gff.gz') || lower.endsWith('.gff3.gz')) {
+    config.type = 'annotation';
+    config.indexURL = url + '.tbi';
+  }
+
+  return config;
+}
+
+async function addTrackByPath(filePath) {
+  if (!filePath || loadedTracks.has(filePath)) return;
+
+  const config = buildTrackConfig(filePath);
+  try {
+    await browser.loadTrack(config);
+    loadedTracks.add(filePath);
+    addChip(filePath, config.name);
+    updateUrlQuietly();
+  } catch (e) {
+    console.warn('Failed to load track:', filePath, e);
+  }
+}
+
+function addChip(filePath, displayName) {
+  const chip = document.createElement('span');
+  chip.className = 'file-chip';
+  chip.dataset.path = filePath;
+  chip.innerHTML = displayName + ' <span class="remove" title="remove">&times;</span>';
+  chip.querySelector('.remove').addEventListener('click', () => {
+    browser.removeTrackByName(displayName);
+    loadedTracks.delete(filePath);
+    chip.remove();
+    updateUrlQuietly();
+  });
+  document.getElementById('loaded-tracks').appendChild(chip);
 }
 
 // ── navigation ────────────────────────────────────────────────
@@ -158,69 +276,39 @@ document.getElementById('locus-input').addEventListener('keydown', e => {
   if (e.key === 'Enter') document.getElementById('go-btn').click();
 });
 
-// ── add track ─────────────────────────────────────────────────
-document.getElementById('add-track-btn').addEventListener('click', async () => {
-  const sel = document.getElementById('file-select');
-  const filePath = sel.value;
-  if (!filePath || loadedTracks.has(filePath)) return;
+// ── add single track ─────────────────────────────────────────
+document.getElementById('add-track-btn').addEventListener('click', () => {
+  addTrackByPath(document.getElementById('file-select').value);
+});
 
-  const url = '/data/' + filePath;
-  const lower = filePath.toLowerCase();
-
-  const trackConfig = { name: filePath.split('/').pop(), url };
-
-  // try to find matching index
-  if (lower.endsWith('.bam')) {
-    trackConfig.type = 'alignment';
-    trackConfig.format = 'bam';
-    trackConfig.indexURL = url + '.bai';
-  } else if (lower.endsWith('.cram')) {
-    trackConfig.type = 'alignment';
-    trackConfig.format = 'cram';
-    trackConfig.indexURL = url + '.crai';
-  } else if (lower.endsWith('.vcf.gz')) {
-    trackConfig.type = 'variant';
-    trackConfig.format = 'vcf';
-    trackConfig.indexURL = url + '.tbi';
-  } else if (lower.endsWith('.bed.gz')) {
-    trackConfig.type = 'annotation';
-    trackConfig.format = 'bed';
-    trackConfig.indexURL = url + '.tbi';
-  } else if (lower.endsWith('.bed')) {
-    trackConfig.type = 'annotation';
-    trackConfig.format = 'bed';
-    trackConfig.displayMode = 'EXPANDED';
-  } else if (lower.endsWith('.bedgraph')) {
-    trackConfig.type = 'wig';
-    trackConfig.format = 'bedgraph';
-  } else if (lower.endsWith('.bw') || lower.endsWith('.bigwig')) {
-    trackConfig.type = 'wig';
-    trackConfig.format = 'bigwig';
-  } else if (lower.endsWith('.gtf.gz') || lower.endsWith('.gff.gz') || lower.endsWith('.gff3.gz')) {
-    trackConfig.type = 'annotation';
-    trackConfig.indexURL = url + '.tbi';
+// ── add all BAMs ──────────────────────────────────────────────
+document.getElementById('add-all-btn').addEventListener('click', async () => {
+  for (const f of allFiles) {
+    if (/\.bam$/i.test(f.name)) {
+      await addTrackByPath(f.path);
+    }
   }
+});
 
-  await browser.loadTrack(trackConfig);
-  loadedTracks.add(filePath);
-
-  // show chip
-  const chip = document.createElement('span');
-  chip.className = 'file-chip';
-  chip.innerHTML = filePath.split('/').pop() + ' <span class="remove" title="remove">&times;</span>';
-  chip.querySelector('.remove').addEventListener('click', () => {
-    browser.removeTrackByName(trackConfig.name);
-    loadedTracks.delete(filePath);
-    chip.remove();
+// ── share link ───────────────────────────────────────────────
+document.getElementById('share-btn').addEventListener('click', () => {
+  const input = document.getElementById('share-input');
+  const status = document.getElementById('snap-status');
+  input.value = buildShareUrl();
+  input.hidden = false;
+  input.select();
+  navigator.clipboard.writeText(input.value).then(() => {
+    status.textContent = 'Link copied to clipboard';
+  }).catch(() => {
+    status.textContent = 'Select and copy the link above';
   });
-  document.getElementById('loaded-tracks').appendChild(chip);
 });
 
 // ── snapshots ─────────────────────────────────────────────────
 document.getElementById('snap-svg').addEventListener('click', async () => {
   if (!browser) return;
   const status = document.getElementById('snap-status');
-  status.textContent = 'Generating SVG…';
+  status.textContent = 'Generating SVG...';
   try {
     const svg = await browser.toSVG();
     const blob = new Blob([svg], { type: 'image/svg+xml' });
@@ -232,7 +320,7 @@ document.getElementById('snap-svg').addEventListener('click', async () => {
 document.getElementById('snap-png').addEventListener('click', async () => {
   if (!browser) return;
   const status = document.getElementById('snap-status');
-  status.textContent = 'Generating PNG…';
+  status.textContent = 'Generating PNG...';
   try {
     const svg = await browser.toSVG();
     const blob = await svgToPngBlob(svg);
@@ -252,7 +340,7 @@ function svgToPngBlob(svgString) {
     const url = URL.createObjectURL(svgBlob);
     const img = new Image();
     img.onload = () => {
-      const scale = 2; // retina-quality
+      const scale = 2;
       const canvas = document.createElement('canvas');
       canvas.width = img.width * scale;
       canvas.height = img.height * scale;

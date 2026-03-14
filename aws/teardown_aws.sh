@@ -8,12 +8,8 @@ set -euo pipefail
 # Usage: ./teardown_aws.sh [--yes]
 #
 
-REGION="us-east-2"
-BUCKET="remoteigv-data"
-KEY_NAME="remoteigv-key"
-ROLE_NAME="remoteIGV-EC2-S3Read"
-SG_NAME="remoteigv-sg"
-TAG="remoteIGV"
+source "$(dirname "$0")/config.sh"
+
 AUTO_YES=false
 
 [ "${1:-}" = "--yes" ] && AUTO_YES=true

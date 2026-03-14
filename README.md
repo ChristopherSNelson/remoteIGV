@@ -88,6 +88,24 @@ If your data lives on S3 or you want to share the viewer with others, there are 
 - AWS CLI configured (`aws configure`)
 - An AWS account with permissions to create S3 buckets, EC2 instances, IAM roles, and security groups
 
+### Configuration
+
+All scripts read from `aws/config.sh` with sensible defaults. Override via environment variables or an `aws/.env` file:
+
+```bash
+# option A: env vars
+REMOTEIGV_REGION=eu-west-1 REMOTEIGV_BUCKET=my-igv-data ./setup_aws.sh
+
+# option B: .env file (not committed to git)
+cat > aws/.env << 'EOF'
+REMOTEIGV_REGION=eu-west-1
+REMOTEIGV_BUCKET=my-igv-data
+REMOTEIGV_INSTANCE_TYPE=t3.micro
+EOF
+```
+
+Available settings: `REMOTEIGV_REGION`, `REMOTEIGV_BUCKET`, `REMOTEIGV_PORT`, `REMOTEIGV_INSTANCE_TYPE`, `REMOTEIGV_KEY_NAME`.
+
 ### Step 1: Create AWS resources
 
 ```bash
@@ -96,7 +114,7 @@ cd aws
 ```
 
 This creates:
-- An S3 bucket (`remoteigv-data`) for your genomic files
+- An S3 bucket (default: `remoteigv-data`) for your genomic files
 - An IAM role so the EC2 instance can read from S3
 - A security group allowing SSH and port 8080 from your current IP
 - An SSH key pair saved to `~/.ssh/remoteigv-key.pem`
@@ -124,8 +142,9 @@ This launches a t3.small EC2 instance, mounts the S3 bucket via [mountpoint-s3](
 ### Managing the instance
 
 ```bash
-./deploy.sh --stop    # stop the instance (saves ~$0.02/hr, keeps your data)
-./deploy.sh --start   # restart a stopped instance
+./deploy.sh --stop      # stop the instance (saves ~$0.02/hr, keeps your data)
+./deploy.sh --start     # restart a stopped instance
+./deploy.sh --redeploy  # push updated code to running instance
 ```
 
 ### Tearing down
@@ -145,6 +164,7 @@ Removes all AWS resources (EC2, S3, IAM, security group, SSH key). Prompts befor
 ├── templates/index.html    # IGV.js frontend
 ├── requirements.txt        # Python dependencies
 └── aws/
+    ├── config.sh           # shared settings (region, bucket, etc.)
     ├── setup_aws.sh        # create AWS resources
     ├── upload_test_data.sh # upload demo data to S3
     ├── deploy.sh           # launch/manage EC2 instance

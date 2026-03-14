@@ -4,3 +4,5 @@ __pycache__/
 static/
 .DS_Store
 *.png
+.claude/
+aws/.env
