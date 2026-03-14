@@ -1,0 +1,158 @@
+# remoteIGV
+
+Browse BAM, CRAM, VCF, and BED files in your web browser — without downloading them to your laptop.
+
+remoteIGV is a lightweight web server that wraps [IGV.js](https://github.com/igvteam/igv.js) and serves your genomic files over HTTP with byte-range support. Point it at a directory of BAMs and open a browser. That's it.
+
+![screenshot](Screenshot.png)
+
+## Quick start (local)
+
+```bash
+# first run creates a virtualenv and installs dependencies
+./run.sh /path/to/your/bam/directory
+
+# subsequent runs skip the install step
+./run.sh /path/to/your/bam/directory 9000   # optional custom port
+```
+
+Then open [http://localhost:8080](http://localhost:8080) in your browser.
+
+Your files stay on the server. IGV.js streams just the bytes it needs using HTTP range requests, so even multi-gigabyte BAMs load quickly.
+
+## Quick start (remote server)
+
+If your BAMs live on a Linux server (e.g. a shared compute node), you can run remoteIGV there and view it from your laptop.
+
+```bash
+# on the remote server
+ssh yourserver
+cd /path/to/remoteIGV
+./run.sh /data/bams 8080
+```
+
+Then from your laptop, set up an SSH tunnel:
+
+```bash
+ssh -N -L 8080:localhost:8080 yourserver
+```
+
+Open [http://localhost:8080](http://localhost:8080) on your laptop. You're now browsing BAMs that live on the server — nothing gets downloaded to your machine.
+
+The `-N` flag means "don't open a shell, just forward the port." Close it with Ctrl+C when you're done.
+
+If port 8080 is already taken on either end, pick any other port:
+
+```bash
+# server side
+./run.sh /data/bams 9999
+
+# laptop side
+ssh -N -L 9999:localhost:9999 yourserver
+# then open http://localhost:9999
+```
+
+## What you'll see
+
+The browser opens with three genome-wide annotation tracks loaded automatically:
+
+- **ENCODE cCREs** — regulatory regions (promoters, enhancers, etc.)
+- **MANE Select** — curated gene models from NCBI/EMBL
+- **phyloP 100-way** — cross-species conservation scores
+
+These are streamed directly from UCSC, so they work at any locus with no setup.
+
+Your own files (BAMs, BEDs, VCFs, etc.) appear in the **Add track** dropdown. Select a file and click **+ Add** to load it. You can also type a gene name or coordinates into the **Region** box and press Enter to navigate.
+
+## Supported file types
+
+| Type | Extensions | Index |
+|------|-----------|-------|
+| Alignments | `.bam`, `.cram` | `.bai`, `.crai` |
+| Variants | `.vcf.gz` | `.tbi` |
+| Annotations | `.bed`, `.bed.gz`, `.gff.gz`, `.gtf.gz` | `.tbi` (for gzipped) |
+| Quantitative | `.bw`, `.bigwig`, `.bedgraph` | — |
+
+Index files (`.bai`, `.tbi`, etc.) should sit next to their data files. The server finds them automatically.
+
+## Saving snapshots
+
+The bottom bar has **Download SVG** and **Download PNG** buttons. These capture the current view — useful for figures or sharing with collaborators.
+
+## Deploying to AWS
+
+If your data lives on S3 or you want to share the viewer with others, there are scripts to deploy remoteIGV on an EC2 instance with S3 mounted as a local filesystem.
+
+### Prerequisites
+
+- AWS CLI configured (`aws configure`)
+- An AWS account with permissions to create S3 buckets, EC2 instances, IAM roles, and security groups
+
+### Step 1: Create AWS resources
+
+```bash
+cd aws
+./setup_aws.sh
+```
+
+This creates:
+- An S3 bucket (`remoteigv-data`) for your genomic files
+- An IAM role so the EC2 instance can read from S3
+- A security group allowing SSH and port 8080 from your current IP
+- An SSH key pair saved to `~/.ssh/remoteigv-key.pem`
+
+Safe to re-run — it skips anything that already exists.
+
+### Step 2: Upload data
+
+```bash
+./upload_test_data.sh
+```
+
+This downloads a small HG002 BAM (~736 KB) from igv.js test data and fetches annotation tracks (MANE Select genes, ENCODE cCREs, phyloP conservation) from the UCSC Genome Browser API, then uploads everything to S3.
+
+To use your own data instead, upload BAM/VCF/BED files to `s3://remoteigv-data/` using `aws s3 cp`.
+
+### Step 3: Deploy
+
+```bash
+./deploy.sh
+```
+
+This launches a t3.small EC2 instance, mounts the S3 bucket via [mountpoint-s3](https://github.com/awslabs/mountpoint-s3), and starts the server. It prints the URL when ready.
+
+### Managing the instance
+
+```bash
+./deploy.sh --stop    # stop the instance (saves ~$0.02/hr, keeps your data)
+./deploy.sh --start   # restart a stopped instance
+```
+
+### Tearing down
+
+```bash
+./teardown_aws.sh
+```
+
+Removes all AWS resources (EC2, S3, IAM, security group, SSH key). Prompts before each deletion. Pass `--yes` to skip prompts.
+
+## Project structure
+
+```
+.
+├── run.sh                  # local quick start
+├── server.py               # FastAPI server with range request support
+├── templates/index.html    # IGV.js frontend
+├── requirements.txt        # Python dependencies
+└── aws/
+    ├── setup_aws.sh        # create AWS resources
+    ├── upload_test_data.sh # upload demo data to S3
+    ├── deploy.sh           # launch/manage EC2 instance
+    └── teardown_aws.sh     # clean up everything
+```
+
+## Citation
+
+remoteIGV is built on IGV.js. If you use it in published work, please cite:
+
+> Robinson JT, Thorvaldsdóttir H, Turner D, Mesirov JP. igv.js: an embeddable JavaScript implementation of the Integrative Genomics Viewer (IGV). *Bioinformatics*. 2023;39(1):btac830. doi:[10.1093/bioinformatics/btac830](https://doi.org/10.1093/bioinformatics/btac830)

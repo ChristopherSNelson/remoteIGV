@@ -1,0 +1,273 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>remoteIGV</title>
+<script src="https://cdn.jsdelivr.net/npm/igv@3.1.0/dist/igv.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
+<style>
+  :root { --bg: #1a1a2e; --surface: #16213e; --accent: #0f3460; --text: #e0e0e0; --highlight: #53a8b6; }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; }
+
+  .toolbar { background: var(--surface); padding: 12px 20px; display: flex; align-items: center; gap: 12px; flex-wrap: wrap; border-bottom: 1px solid var(--accent); }
+  .toolbar h1 { font-size: 18px; font-weight: 600; color: var(--highlight); margin-right: 12px; }
+  .toolbar select, .toolbar input, .toolbar button {
+    font-size: 13px; padding: 6px 10px; border-radius: 4px; border: 1px solid var(--accent);
+    background: var(--bg); color: var(--text); outline: none;
+  }
+  .toolbar button { cursor: pointer; background: var(--accent); border-color: var(--highlight); font-weight: 500; }
+  .toolbar button:hover { background: var(--highlight); color: #fff; }
+  .toolbar .sep { width: 1px; height: 24px; background: var(--accent); }
+
+  #locus-input { width: 220px; }
+  #file-select { max-width: 300px; }
+
+  .igv-container { margin: 0; }
+
+  /* make IGV tracks have a dark background */
+  .igv-root-div { background: #fff !important; }
+
+  #snapshot-bar {
+    background: var(--surface); padding: 10px 20px; display: flex; align-items: center; gap: 12px;
+    border-top: 1px solid var(--accent); position: sticky; bottom: 0;
+  }
+  #snapshot-bar button { font-size: 14px; padding: 8px 18px; border-radius: 4px; border: 1px solid var(--highlight); background: var(--highlight); color: #fff; cursor: pointer; font-weight: 600; }
+  #snapshot-bar button:hover { background: #3d8a96; }
+  #snapshot-bar .status { font-size: 12px; color: #888; }
+
+  .file-list { max-height: 180px; overflow-y: auto; font-size: 12px; }
+  .file-chip {
+    display: inline-flex; align-items: center; gap: 4px; background: var(--accent); padding: 3px 8px;
+    border-radius: 3px; margin: 2px; font-size: 12px;
+  }
+  .file-chip .remove { cursor: pointer; color: #f66; font-weight: bold; }
+</style>
+</head>
+<body>
+
+<div class="toolbar">
+  <h1>remoteIGV</h1>
+  <div class="sep"></div>
+
+  <label>Region:
+    <input id="locus-input" type="text" placeholder="chr1:12,345-67,890 or gene" value="chr11:119,076,212-119,102,218">
+  </label>
+  <button id="go-btn">Go</button>
+
+  <div class="sep"></div>
+
+  <label>Add track:
+    <select id="file-select"><option value="">— load files —</option></select>
+  </label>
+  <button id="add-track-btn">+ Add</button>
+
+  <div class="sep"></div>
+  <span id="loaded-tracks" class="file-chip-area"></span>
+</div>
+
+<div id="igv-div" class="igv-container"></div>
+
+<div id="snapshot-bar">
+  <button id="snap-svg">Download SVG</button>
+  <button id="snap-png">Download PNG</button>
+  <span class="status" id="snap-status"></span>
+</div>
+
+<script>
+// ── state ──────────────────────────────────────────────────────
+let browser = null;
+const loadedTracks = new Set();
+
+// ── init IGV ───────────────────────────────────────────────────
+document.addEventListener('DOMContentLoaded', async () => {
+  const options = {
+    genome: "hg38",
+    locus: document.getElementById('locus-input').value,
+    tracks: [
+      {
+        name: "ENCODE cCREs",
+        type: "annotation",
+        format: "bigBed",
+        url: "https://hgdownload.soe.ucsc.edu/gbdb/hg38/encode3/ccre/encodeCcreCombined.bb",
+        displayMode: "EXPANDED",
+        visibilityWindow: 2000000,
+        color: "#1565C0",
+      },
+      {
+        name: "MANE Select",
+        type: "annotation",
+        format: "bigBed",
+        url: "https://hgdownload.soe.ucsc.edu/gbdb/hg38/mane/mane.bb",
+        displayMode: "EXPANDED",
+        visibilityWindow: 2000000,
+        color: "#2E7D32",
+      },
+      {
+        name: "phyloP 100-way",
+        type: "wig",
+        format: "bigwig",
+        url: "https://hgdownload.cse.ucsc.edu/goldenPath/hg38/phyloP100way/hg38.phyloP100way.bw",
+        autoscale: true,
+        color: "#555555",
+      },
+    ],
+  };
+
+  browser = await igv.createBrowser(document.getElementById('igv-div'), options);
+
+  // populate file picker and auto-load all tracks
+  await loadFileList();
+  await autoLoadTracks();
+});
+
+// ── file list ─────────────────────────────────────────────────
+async function loadFileList() {
+  const resp = await fetch('/api/files');
+  const files = await resp.json();
+  const sel = document.getElementById('file-select');
+  for (const f of files) {
+    // skip index files in the picker
+    if (/\.(bai|crai|csi|tbi|idx)$/i.test(f.name)) continue;
+    const opt = document.createElement('option');
+    opt.value = f.path;
+    opt.textContent = f.path + '  (' + (f.size / 1e6).toFixed(1) + ' MB)';
+    sel.appendChild(opt);
+  }
+}
+
+// ── auto-load all tracks on startup ───────────────────────────
+async function autoLoadTracks() {
+  const sel = document.getElementById('file-select');
+  for (const opt of sel.options) {
+    if (!opt.value) continue;
+    sel.value = opt.value;
+    document.getElementById('add-track-btn').click();
+    // small delay to let each track initialize
+    await new Promise(r => setTimeout(r, 100));
+  }
+}
+
+// ── navigation ────────────────────────────────────────────────
+document.getElementById('go-btn').addEventListener('click', () => {
+  const locus = document.getElementById('locus-input').value.trim();
+  if (browser && locus) browser.search(locus);
+});
+document.getElementById('locus-input').addEventListener('keydown', e => {
+  if (e.key === 'Enter') document.getElementById('go-btn').click();
+});
+
+// ── add track ─────────────────────────────────────────────────
+document.getElementById('add-track-btn').addEventListener('click', async () => {
+  const sel = document.getElementById('file-select');
+  const filePath = sel.value;
+  if (!filePath || loadedTracks.has(filePath)) return;
+
+  const url = '/data/' + filePath;
+  const lower = filePath.toLowerCase();
+
+  const trackConfig = { name: filePath.split('/').pop(), url };
+
+  // try to find matching index
+  if (lower.endsWith('.bam')) {
+    trackConfig.type = 'alignment';
+    trackConfig.format = 'bam';
+    trackConfig.indexURL = url + '.bai';
+  } else if (lower.endsWith('.cram')) {
+    trackConfig.type = 'alignment';
+    trackConfig.format = 'cram';
+    trackConfig.indexURL = url + '.crai';
+  } else if (lower.endsWith('.vcf.gz')) {
+    trackConfig.type = 'variant';
+    trackConfig.format = 'vcf';
+    trackConfig.indexURL = url + '.tbi';
+  } else if (lower.endsWith('.bed.gz')) {
+    trackConfig.type = 'annotation';
+    trackConfig.format = 'bed';
+    trackConfig.indexURL = url + '.tbi';
+  } else if (lower.endsWith('.bed')) {
+    trackConfig.type = 'annotation';
+    trackConfig.format = 'bed';
+    trackConfig.displayMode = 'EXPANDED';
+  } else if (lower.endsWith('.bedgraph')) {
+    trackConfig.type = 'wig';
+    trackConfig.format = 'bedgraph';
+  } else if (lower.endsWith('.bw') || lower.endsWith('.bigwig')) {
+    trackConfig.type = 'wig';
+    trackConfig.format = 'bigwig';
+  } else if (lower.endsWith('.gtf.gz') || lower.endsWith('.gff.gz') || lower.endsWith('.gff3.gz')) {
+    trackConfig.type = 'annotation';
+    trackConfig.indexURL = url + '.tbi';
+  }
+
+  await browser.loadTrack(trackConfig);
+  loadedTracks.add(filePath);
+
+  // show chip
+  const chip = document.createElement('span');
+  chip.className = 'file-chip';
+  chip.innerHTML = filePath.split('/').pop() + ' <span class="remove" title="remove">&times;</span>';
+  chip.querySelector('.remove').addEventListener('click', () => {
+    browser.removeTrackByName(trackConfig.name);
+    loadedTracks.delete(filePath);
+    chip.remove();
+  });
+  document.getElementById('loaded-tracks').appendChild(chip);
+});
+
+// ── snapshots ─────────────────────────────────────────────────
+document.getElementById('snap-svg').addEventListener('click', async () => {
+  if (!browser) return;
+  const status = document.getElementById('snap-status');
+  status.textContent = 'Generating SVG…';
+  try {
+    const svg = await browser.toSVG();
+    const blob = new Blob([svg], { type: 'image/svg+xml' });
+    saveAs(blob, snapshotFilename('svg'));
+    status.textContent = 'SVG saved!';
+  } catch (e) { status.textContent = 'Error: ' + e.message; }
+});
+
+document.getElementById('snap-png').addEventListener('click', async () => {
+  if (!browser) return;
+  const status = document.getElementById('snap-status');
+  status.textContent = 'Generating PNG…';
+  try {
+    const svg = await browser.toSVG();
+    const blob = await svgToPngBlob(svg);
+    saveAs(blob, snapshotFilename('png'));
+    status.textContent = 'PNG saved!';
+  } catch (e) { status.textContent = 'Error: ' + e.message; }
+});
+
+function snapshotFilename(ext) {
+  const locus = document.getElementById('locus-input').value.trim().replace(/[^a-zA-Z0-9_:-]/g, '_');
+  return 'igv_' + locus + '_' + Date.now() + '.' + ext;
+}
+
+function svgToPngBlob(svgString) {
+  return new Promise((resolve, reject) => {
+    const svgBlob = new Blob([svgString], { type: 'image/svg+xml;charset=utf-8' });
+    const url = URL.createObjectURL(svgBlob);
+    const img = new Image();
+    img.onload = () => {
+      const scale = 2; // retina-quality
+      const canvas = document.createElement('canvas');
+      canvas.width = img.width * scale;
+      canvas.height = img.height * scale;
+      const ctx = canvas.getContext('2d');
+      ctx.scale(scale, scale);
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(0, 0, img.width, img.height);
+      ctx.drawImage(img, 0, 0);
+      URL.revokeObjectURL(url);
+      canvas.toBlob(blob => blob ? resolve(blob) : reject(new Error('Canvas toBlob failed')), 'image/png');
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('SVG render failed')); };
+    img.src = url;
+  });
+}
+</script>
+</body>
+</html>
