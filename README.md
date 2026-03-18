@@ -98,7 +98,8 @@ blobfuse2 mount /mnt/azdata --tmp-path /tmp/blobfuse
 
 ### HPC / shared filesystems
 
-If your BAMs already live on a shared filesystem (NFS, Lustre, GPFS), just point the server at them — no mounting needed:
+If your BAMs already live on a shared filesystem (NFS, Lustre, GPFS), 
+just point the server at them . No mounting needed:
 
 ```bash
 # on an HPC login or interactive node
@@ -108,7 +109,9 @@ If your BAMs already live on a shared filesystem (NFS, Lustre, GPFS), just point
 ssh -N -L 8080:localhost:8080 hpc-login
 ```
 
-If your HPC doesn't allow long-running processes on login nodes, request an interactive session or submit a job that runs `run.sh` and note the compute node hostname for the SSH tunnel.
+If your HPC doesn't allow long-running processes on login nodes, 
+request an interactive session or submit a job that 
+runs `run.sh` and note the compute node hostname for the SSH tunnel.
 
 ### Docker
 
@@ -121,16 +124,20 @@ Or clone the repo into the container and use `run.sh`.
 
 ## Deploying to AWS
 
-If your data lives on S3 or you want to share the viewer with others, there are scripts to deploy remoteIGV on an EC2 instance with S3 mounted as a local filesystem.
+If your data lives on S3 or you want to share the viewer with others, 
+there are scripts to deploy remoteIGV on an EC2 instance with 
+S3 mounted as a local filesystem.
 
 ### Prerequisites
 
 - AWS CLI configured (`aws configure`)
-- An AWS account with permissions to create S3 buckets, EC2 instances, IAM roles, and security groups
+- An AWS account with permissions to create S3 buckets, 
+EC2 instances, IAM roles, and security groups
 
 ### Configuration
 
-All scripts read from `aws/config.sh` with sensible defaults. Override via environment variables or an `aws/.env` file:
+All scripts read from `aws/config.sh` with sensible defaults. 
+Override via environment variables or an `aws/.env` file:
 
 ```bash
 # option A: env vars
@@ -144,7 +151,8 @@ REMOTEIGV_INSTANCE_TYPE=t3.micro
 EOF
 ```
 
-Available settings: `REMOTEIGV_REGION`, `REMOTEIGV_BUCKET`, `REMOTEIGV_PORT`, `REMOTEIGV_INSTANCE_TYPE`, `REMOTEIGV_KEY_NAME`.
+Available settings: `REMOTEIGV_REGION`, `REMOTEIGV_BUCKET`, 
+`REMOTEIGV_PORT`, `REMOTEIGV_INSTANCE_TYPE`, `REMOTEIGV_KEY_NAME`.
 
 ### Step 1: Create AWS resources
 
@@ -167,9 +175,12 @@ Safe to re-run — it skips anything that already exists.
 ./upload_test_data.sh
 ```
 
-This downloads a small HG002 BAM (~736 KB) from igv.js test data and fetches annotation tracks (MANE Select genes, ENCODE cCREs, phyloP conservation) from the UCSC Genome Browser API, then uploads everything to S3.
+This downloads a small HG002 BAM (~736 KB) from igv.js test data 
+and fetches annotation tracks (MANE Select genes, ENCODE cCREs, phyloP conservation) 
+from the UCSC Genome Browser API, then uploads everything to S3.
 
-To use your own data instead, upload BAM/VCF/BED files to `s3://remoteigv-data/` using `aws s3 cp`.
+To use your own data instead, upload BAM/VCF/BED files to 
+`s3://remoteigv-data/` using `aws s3 cp`.
 
 ### Step 3: Deploy
 
@@ -177,7 +188,9 @@ To use your own data instead, upload BAM/VCF/BED files to `s3://remoteigv-data/`
 ./deploy.sh
 ```
 
-This launches a t3.small EC2 instance, mounts the S3 bucket via [mountpoint-s3](https://github.com/awslabs/mountpoint-s3), and starts the server. It prints the URL when ready.
+This launches a t3.small EC2 instance, mounts the S3 bucket via 
+[mountpoint-s3](https://github.com/awslabs/mountpoint-s3), 
+and starts the server. It prints the URL when ready.
 
 ### Managing the instance
 
@@ -193,7 +206,8 @@ This launches a t3.small EC2 instance, mounts the S3 bucket via [mountpoint-s3](
 ./teardown_aws.sh
 ```
 
-Removes all AWS resources (EC2, S3, IAM, security group, SSH key). Prompts before each deletion. Pass `--yes` to skip prompts.
+Removes all AWS resources (EC2, S3, IAM, security group, SSH key). 
+Prompts before each deletion. Pass `--yes` to skip prompts.
 
 ## Project structure
 
