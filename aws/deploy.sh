@@ -152,6 +152,10 @@ if [ "$ACTION" = "start" ]; then
     aws ec2 start-instances --instance-ids $INST --region "$REGION" > /dev/null
     aws ec2 wait instance-running --instance-ids $INST --region "$REGION"
     IP=$(get_ip "$INST")
+    wait_for_ssh "$IP"
+    echo "Remounting S3 and restarting service..."
+    ssh -i "$KEY_FILE" -o StrictHostKeyChecking=no ec2-user@"$IP" \
+      "mountpoint -q /mnt/s3data || sudo mount-s3 ${BUCKET} /mnt/s3data --allow-other --read-only && sudo systemctl restart remoteigv"
     echo "Restarted $INST → http://${IP}:${PORT}"
   else
     echo "No stopped instance found"

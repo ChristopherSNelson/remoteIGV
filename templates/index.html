@@ -7,40 +7,41 @@
 <script src="https://cdn.jsdelivr.net/npm/igv@3.1.0/dist/igv.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
 <style>
-  :root { --bg: #1a1a2e; --surface: #16213e; --accent: #0f3460; --text: #e0e0e0; --highlight: #53a8b6; }
   * { box-sizing: border-box; margin: 0; padding: 0; }
-  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif; background: #f5f5f5; color: #333; min-height: 100vh; }
 
-  .toolbar { background: var(--surface); padding: 12px 20px; display: flex; align-items: center; gap: 12px; flex-wrap: wrap; border-bottom: 1px solid var(--accent); }
-  .toolbar h1 { font-size: 18px; font-weight: 600; color: var(--highlight); margin-right: 12px; }
-  .toolbar select, .toolbar input, .toolbar button {
-    font-size: 13px; padding: 6px 10px; border-radius: 4px; border: 1px solid var(--accent);
-    background: var(--bg); color: var(--text); outline: none;
+  .toolbar {
+    background: #fff; padding: 10px 16px; display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+    border-bottom: 1px solid #ddd; position: sticky; top: 0; z-index: 100;
   }
-  .toolbar button { cursor: pointer; background: var(--accent); border-color: var(--highlight); font-weight: 500; }
-  .toolbar button:hover { background: var(--highlight); color: #fff; }
-  .toolbar .sep { width: 1px; height: 24px; background: var(--accent); }
+  .toolbar h1 { font-size: 16px; font-weight: 700; color: #333; margin-right: 8px; }
+  .toolbar select, .toolbar input, .toolbar button {
+    font-size: 13px; padding: 5px 10px; border-radius: 4px; border: 1px solid #ccc;
+    background: #fff; color: #333; outline: none;
+  }
+  .toolbar button { cursor: pointer; background: #4a90d9; color: #fff; border-color: #4a90d9; font-weight: 500; }
+  .toolbar button:hover { background: #357abd; }
+  .toolbar .sep { width: 1px; height: 22px; background: #ddd; }
 
   #locus-input { width: 260px; }
   #file-select { max-width: 300px; }
 
-  .igv-container { margin: 0; }
-  .igv-root-div { background: #fff !important; }
+  #igv-div { padding: 8px; }
 
   #bottom-bar {
-    background: var(--surface); padding: 10px 20px; display: flex; align-items: center; gap: 12px;
-    border-top: 1px solid var(--accent); position: sticky; bottom: 0; flex-wrap: wrap;
+    background: #fff; padding: 8px 16px; display: flex; align-items: center; gap: 10px;
+    border-top: 1px solid #ddd; position: sticky; bottom: 0; z-index: 100; flex-wrap: wrap;
   }
-  #bottom-bar button { font-size: 13px; padding: 7px 14px; border-radius: 4px; border: 1px solid var(--highlight); background: var(--highlight); color: #fff; cursor: pointer; font-weight: 600; }
-  #bottom-bar button:hover { background: #3d8a96; }
-  #bottom-bar .status { font-size: 12px; color: #888; flex: 1; }
-  #share-input { font-size: 12px; width: 400px; max-width: 40vw; padding: 5px 8px; background: var(--bg); color: var(--text); border: 1px solid var(--accent); border-radius: 4px; }
+  #bottom-bar button { font-size: 13px; padding: 6px 14px; border-radius: 4px; border: 1px solid #ccc; background: #fff; color: #333; cursor: pointer; font-weight: 500; }
+  #bottom-bar button:hover { background: #f0f0f0; }
+  .status { font-size: 12px; color: #888; flex: 1; }
+  #share-input { font-size: 12px; width: 400px; max-width: 40vw; padding: 5px 8px; border: 1px solid #ccc; border-radius: 4px; }
 
   .file-chip {
-    display: inline-flex; align-items: center; gap: 4px; background: var(--accent); padding: 3px 8px;
-    border-radius: 3px; margin: 2px; font-size: 12px;
+    display: inline-flex; align-items: center; gap: 4px; background: #e8f0fe; padding: 3px 8px;
+    border-radius: 3px; margin: 2px; font-size: 12px; color: #333;
   }
-  .file-chip .remove { cursor: pointer; color: #f66; font-weight: bold; }
+  .file-chip .remove { cursor: pointer; color: #c00; font-weight: bold; }
 </style>
 </head>
 <body>
@@ -66,7 +67,7 @@
   <span id="loaded-tracks" class="file-chip-area"></span>
 </div>
 
-<div id="igv-div" class="igv-container"></div>
+<div id="igv-div"></div>
 
 <div id="bottom-bar">
   <button id="snap-svg">Download SVG</button>
@@ -94,7 +95,6 @@ function getUrlParams() {
 function buildShareUrl() {
   const base = window.location.origin + window.location.pathname;
   const params = new URLSearchParams();
-  // get current locus from IGV
   if (browser) {
     const loci = browser.currentLoci();
     if (loci && loci.length) params.set('locus', loci[0]);
@@ -114,9 +114,10 @@ function updateUrlQuietly() {
 document.addEventListener('DOMContentLoaded', async () => {
   const params = getUrlParams();
 
-  // set locus from URL param or keep default
   const locusInput = document.getElementById('locus-input');
-  if (params.locus) locusInput.value = params.locus;
+  if (params.locus && /^chr[0-9XYM]/i.test(params.locus)) {
+    locusInput.value = params.locus;
+  }
 
   const options = {
     genome: "hg38",
@@ -129,16 +130,6 @@ document.addEventListener('DOMContentLoaded', async () => {
         url: "https://hgdownload.soe.ucsc.edu/gbdb/hg38/encode3/ccre/encodeCcreCombined.bb",
         displayMode: "EXPANDED",
         visibilityWindow: 2000000,
-        color: "#1565C0",
-      },
-      {
-        name: "MANE Select",
-        type: "annotation",
-        format: "bigBed",
-        url: "https://hgdownload.soe.ucsc.edu/gbdb/hg38/mane/mane.bb",
-        displayMode: "EXPANDED",
-        visibilityWindow: 2000000,
-        color: "#2E7D32",
       },
       {
         name: "phyloP 100-way",
@@ -146,26 +137,26 @@ document.addEventListener('DOMContentLoaded', async () => {
         format: "bigwig",
         url: "https://hgdownload.cse.ucsc.edu/goldenPath/hg38/phyloP100way/hg38.phyloP100way.bw",
         autoscale: true,
-        color: "#555555",
       },
     ],
   };
 
   browser = await igv.createBrowser(document.getElementById('igv-div'), options);
 
-  // update URL when user navigates
   browser.on('locuschange', () => {
     const loci = browser.currentLoci();
     if (loci && loci.length) {
-      locusInput.value = loci[0];
-      updateUrlQuietly();
+      const locus = loci[0];
+      // only update URL if it looks like valid coordinates (chr:start-end)
+      if (/^chr[0-9XYM]/i.test(locus) && locus.includes(':')) {
+        locusInput.value = locus;
+        updateUrlQuietly();
+      }
     }
   });
 
-  // populate file picker
   await loadFileList();
 
-  // load tracks from URL params, or auto-load all
   if (params.tracks) {
     for (const t of params.tracks) {
       await addTrackByPath(t);
@@ -184,17 +175,24 @@ async function loadFileList() {
     if (/\.(bai|crai|csi|tbi|idx)$/i.test(f.name)) continue;
     const opt = document.createElement('option');
     opt.value = f.path;
-    opt.textContent = f.path + '  (' + (f.size / 1e6).toFixed(1) + ' MB)';
+    const sizeMB = f.size / 1e6;
+    const sizeStr = sizeMB >= 1 ? sizeMB.toFixed(0) + ' MB' : (f.size / 1e3).toFixed(0) + ' KB';
+    opt.textContent = f.path + '  (' + sizeStr + ')';
     sel.appendChild(opt);
   }
 }
 
-// ── auto-load all tracks on startup ───────────────────────────
+// ── auto-load small tracks on startup (skip large BAMs/CRAMs) ─
+// Skip files that duplicate the built-in UCSC annotation tracks.
+const SKIP_AUTO = /encode_ccres|mane_select|phyloP100way/i;
+
 async function autoLoadTracks() {
-  const sel = document.getElementById('file-select');
-  for (const opt of sel.options) {
-    if (!opt.value) continue;
-    await addTrackByPath(opt.value);
+  const SIZE_LIMIT = 5 * 1e6; // 5 MB — skip anything larger
+  for (const f of allFiles) {
+    if (/\.(bai|crai|csi|tbi|idx)$/i.test(f.name)) continue;
+    if (/\.(bam|cram)$/i.test(f.name) && f.size > SIZE_LIMIT) continue;
+    if (SKIP_AUTO.test(f.name)) continue;
+    await addTrackByPath(f.path);
   }
 }
 
@@ -241,14 +239,15 @@ function buildTrackConfig(filePath) {
 
 async function addTrackByPath(filePath) {
   if (!filePath || loadedTracks.has(filePath)) return;
+  loadedTracks.add(filePath); // claim the slot before awaiting
 
   const config = buildTrackConfig(filePath);
   try {
     await browser.loadTrack(config);
-    loadedTracks.add(filePath);
     addChip(filePath, config.name);
     updateUrlQuietly();
   } catch (e) {
+    loadedTracks.delete(filePath); // release on failure
     console.warn('Failed to load track:', filePath, e);
   }
 }

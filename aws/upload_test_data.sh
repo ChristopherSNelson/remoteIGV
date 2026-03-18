@@ -95,7 +95,7 @@ if [ -s phyloP100way.bedGraph ]; then
   echo "  Fetched $(wc -l < phyloP100way.bedGraph | tr -d ' ') base positions"
 fi
 
-# ── Upload ────────────────────────────────────────────────────
+# ── Upload demo/ ──────────────────────────────────────────────
 echo ""
 echo "Uploading to s3://$BUCKET/$S3_PREFIX/ ..."
 echo ""
@@ -117,6 +117,49 @@ if [ "$FAIL" = "1" ]; then
   exit 1
 fi
 
+# ── Multisample: 1000G high-coverage hg38 ─────────────────────
+# Stream a region from the 1000G GRCh38 high-coverage CRAMs.
+# Requires samtools >= 1.10 with htslib (for remote CRAM streaming).
+# Uses the EBI CRAM reference server for decoding — no local reference needed.
+echo ""
+echo "========================================="
+echo " Multisample: 1000G hg38 high-coverage"
+echo "========================================="
+echo ""
+
+if ! command -v samtools &>/dev/null; then
+  echo "WARNING: samtools not found — skipping multisample upload."
+  echo "  Install samtools and re-run to populate s3://$BUCKET/multisample/"
+else
+  MULTI_PREFIX="multisample"
+  # Genomic region: ±500kb around HG002 demo locus for good exon coverage
+  LOCUS="chr11:118500000-119600000"
+  # 1000G 30x high-coverage hg38 WGS CRAMs (from EBI SRA)
+  # URLs from: http://ftp.1000genomes.ebi.ac.uk/vol1/ftp/data_collections/1000G_2504_high_coverage/1000G_2504_high_coverage.sequence.index
+  declare -A CRAMS
+  CRAMS[HG00096]="http://ftp.sra.ebi.ac.uk/vol1/run/ERR324/ERR3240114/HG00096.final.cram"
+  CRAMS[HG00097]="http://ftp.sra.ebi.ac.uk/vol1/run/ERR324/ERR3240115/HG00097.final.cram"
+  CRAMS[HG00099]="http://ftp.sra.ebi.ac.uk/vol1/run/ERR324/ERR3240116/HG00099.final.cram"
+  # Use EBI CRAM reference server for decoding (no local reference needed)
+  export REF_PATH=":http://www.ebi.ac.uk/ena/cram/md5/%s"
+
+  for SAMPLE in HG00096 HG00097 HG00099; do
+    CRAM_URL="${CRAMS[$SAMPLE]}"
+    OUT_BAM="${SAMPLE}_chr11.bam"
+    echo "[$SAMPLE] Fetching $LOCUS from hg38 CRAM..."
+    if samtools view -b -o "$OUT_BAM" "$CRAM_URL" "$LOCUS" 2>/dev/null; then
+      samtools index "$OUT_BAM"
+      SIZE=$(ls -lh "$OUT_BAM" | awk '{print $5}')
+      echo "  Created $OUT_BAM ($SIZE), uploading..."
+      aws s3 cp "$OUT_BAM"     "s3://$BUCKET/$MULTI_PREFIX/$OUT_BAM"     --region "$REGION" --quiet
+      aws s3 cp "$OUT_BAM.bai" "s3://$BUCKET/$MULTI_PREFIX/$OUT_BAM.bai" --region "$REGION" --quiet
+      echo "  Uploaded."
+    else
+      echo "  WARNING: Failed to fetch $SAMPLE — skipping."
+    fi
+  done
+fi
+
 echo ""
 echo "========================================="
 echo " Upload complete!"
@@ -125,7 +168,6 @@ echo ""
 aws s3 ls "s3://$BUCKET/$S3_PREFIX/" --region "$REGION" --human-readable
 echo ""
 echo "Test regions for the UI:"
-echo "  HG002  → chr11:119,076,212-119,102,218  (BAM reads + all annotations)"
-echo "  Genes:   VPS11, HMBS, H2AX, DPAGT1 (MANE Select)"
-echo "  Tracks:  32 ENCODE cCREs, ~26K phyloP conservation scores"
+echo "  HG002  → chr11:119,076,212-119,102,218  (long reads, all annotations)"
+echo "  Multi  → chr11:119,076,212-119,102,218  (3x 1000G hg38 exomes)"
 echo ""
