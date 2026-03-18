@@ -4,5 +4,7 @@ __pycache__/
 static/
 .DS_Store
 *.png
+!Screenshot.png
+!templates/igv_screenshot.png
 .claude/
 aws/.env
