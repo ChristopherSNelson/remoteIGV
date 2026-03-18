@@ -54,10 +54,9 @@ ssh -N -L 9999:localhost:9999 yourserver
 
 ## What you'll see
 
-The browser opens with three genome-wide annotation tracks loaded automatically:
+The browser opens with two genome-wide annotation tracks loaded automatically:
 
 - **ENCODE cCREs** — regulatory regions (promoters, enhancers, etc.)
-- **MANE Select** — curated gene models from NCBI/EMBL
 - **phyloP 100-way** — cross-species conservation scores
 
 These are streamed directly from UCSC, so they work at any locus with no setup.
@@ -78,6 +77,47 @@ Index files (`.bai`, `.tbi`, etc.) should sit next to their data files. The serv
 ## Saving snapshots
 
 The bottom bar has **Download SVG** and **Download PNG** buttons. These capture the current view — useful for figures or sharing with collaborators.
+
+## Other environments
+
+The core server is cloud-agnostic — it serves files from any local directory. The `aws/` scripts are just one deployment option.
+
+### GCP / Azure
+
+Mount your cloud storage as a local filesystem and point remoteIGV at it:
+
+```bash
+# GCP: mount a GCS bucket with gcsfuse
+gcsfuse my-genomics-bucket /mnt/gcsdata
+./run.sh /mnt/gcsdata
+
+# Azure: mount Blob Storage with blobfuse2
+blobfuse2 mount /mnt/azdata --tmp-path /tmp/blobfuse
+./run.sh /mnt/azdata
+```
+
+### HPC / shared filesystems
+
+If your BAMs already live on a shared filesystem (NFS, Lustre, GPFS), just point the server at them — no mounting needed:
+
+```bash
+# on an HPC login or interactive node
+./run.sh /shared/lab/genomics 8080
+
+# from your laptop, tunnel through the login node
+ssh -N -L 8080:localhost:8080 hpc-login
+```
+
+If your HPC doesn't allow long-running processes on login nodes, request an interactive session or submit a job that runs `run.sh` and note the compute node hostname for the SSH tunnel.
+
+### Docker
+
+```bash
+docker run --rm -p 8080:8080 -v /your/data:/data python:3.11-slim \
+  bash -c "pip install fastapi uvicorn jinja2 && python server.py -d /data"
+```
+
+Or clone the repo into the container and use `run.sh`.
 
 ## Deploying to AWS
 
