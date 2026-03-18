@@ -1,8 +1,11 @@
 # remoteIGV
 
-Browse BAM, CRAM, VCF, and BED files in your web browser — without downloading them to your laptop.
+Browse BAM, CRAM, VCF, and BED files in your web browser,
+without downloading them to your laptop.
 
-remoteIGV is a lightweight web server that wraps [IGV.js](https://github.com/igvteam/igv.js) and serves your genomic files over HTTP with byte-range support. Point it at a directory of BAMs and open a browser. That's it.
+remoteIGV is a lightweight web server that wraps [IGV.js](https://github.com/igvteam/igv.js) 
+and serves your genomic files over HTTP with byte-range support. 
+Point it at a directory of BAMs and open a browser. That's it.
 
 ![screenshot](Screenshot.png)
 
@@ -18,11 +21,13 @@ remoteIGV is a lightweight web server that wraps [IGV.js](https://github.com/igv
 
 Then open [http://localhost:8080](http://localhost:8080) in your browser.
 
-Your files stay on the server. IGV.js streams just the bytes it needs using HTTP range requests, so even multi-gigabyte BAMs load quickly.
+Your files stay on the server. IGV.js streams just the bytes it needs 
+using HTTP range requests, so even multi-gigabyte BAMs load quickly.
 
 ## Quick start (remote server)
 
-If your BAMs live on a Linux server (e.g. a shared compute node), you can run remoteIGV there and view it from your laptop.
+If your BAMs live on a Linux server (e.g. a shared compute node), 
+you can run remoteIGV there and view it from your laptop.
 
 ```bash
 # on the remote server
@@ -37,9 +42,12 @@ Then from your laptop, set up an SSH tunnel:
 ssh -N -L 8080:localhost:8080 yourserver
 ```
 
-Open [http://localhost:8080](http://localhost:8080) on your laptop. You're now browsing BAMs that live on the server — nothing gets downloaded to your machine.
+Open [http://localhost:8080](http://localhost:8080) on your laptop. 
+You're now browsing BAMs that live on the serve,
+so nothing gets downloaded to your machine.
 
-The `-N` flag means "don't open a shell, just forward the port." Close it with Ctrl+C when you're done.
+The `-N` flag means "don't open a shell, just forward the port." 
+Close it with Ctrl+C when you're done.
 
 If port 8080 is already taken on either end, pick any other port:
 
@@ -61,7 +69,9 @@ The browser opens with two genome-wide annotation tracks loaded automatically:
 
 These are streamed directly from UCSC, so they work at any locus with no setup.
 
-Your own files (BAMs, BEDs, VCFs, etc.) appear in the **Add track** dropdown. Select a file and click **+ Add** to load it. You can also type a gene name or coordinates into the **Region** box and press Enter to navigate.
+Your own files (BAMs, BEDs, VCFs, etc.) appear in the **Add track** dropdown. 
+Select a file and click **+ Add** to load it. 
+You can also type a gene name or coordinates into the **Region** box and press Enter to navigate.
 
 ## Supported file types
 
@@ -72,15 +82,18 @@ Your own files (BAMs, BEDs, VCFs, etc.) appear in the **Add track** dropdown. Se
 | Annotations | `.bed`, `.bed.gz`, `.gff.gz`, `.gtf.gz` | `.tbi` (for gzipped) |
 | Quantitative | `.bw`, `.bigwig`, `.bedgraph` | — |
 
-Index files (`.bai`, `.tbi`, etc.) should sit next to their data files. The server finds them automatically.
+Index files (`.bai`, `.tbi`, etc.) should sit next to their data files. 
+The server finds them automatically.
 
 ## Saving snapshots
 
-The bottom bar has **Download SVG** and **Download PNG** buttons. These capture the current view — useful for figures or sharing with collaborators.
+The bottom bar has **Download SVG** and **Download PNG** buttons. 
+These capture the current view; useful for figures or sharing with collaborators.
 
 ## Other environments
 
-The core server is cloud-agnostic — it serves files from any local directory. The `aws/` scripts are just one deployment option.
+The core server is cloud-agnostic. It serves files from any local directory. 
+The `aws/` scripts are just one deployment option.
 
 ### GCP / Azure
 
