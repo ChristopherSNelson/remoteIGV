@@ -120,9 +120,24 @@ document.addEventListener('DOMContentLoaded', async () => {
   }
 
   const options = {
-    genome: "hg38",
+    reference: {
+      id: "hg38",
+      name: "Human (GRCh38/hg38)",
+      fastaURL: "https://s3.amazonaws.com/igv.broadinstitute.org/genomes/seq/hg38/hg38.fa",
+      indexURL: "https://s3.amazonaws.com/igv.broadinstitute.org/genomes/seq/hg38/hg38.fa.fai",
+      cytobandURL: "https://s3.amazonaws.com/igv.org.genomes/hg38/annotations/cytoBandIdeo.txt.gz",
+      aliasURL: "https://s3.amazonaws.com/igv.org.genomes/hg38/hg38_alias.tab",
+    },
     locus: locusInput.value,
     tracks: [
+      {
+        name: "Refseq Genes",
+        format: "refgene",
+        url: "https://s3.amazonaws.com/igv.org.genomes/hg38/refGene.sorted.txt.gz",
+        indexURL: "https://s3.amazonaws.com/igv.org.genomes/hg38/refGene.sorted.txt.gz.tbi",
+        visibilityWindow: -1,
+        displayMode: "EXPANDED",
+      },
       {
         name: "ENCODE cCREs",
         type: "annotation",
