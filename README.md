@@ -9,42 +9,50 @@ Point it at a directory of BAMs and open a browser. That's it.
 
 ![screenshot](Screenshot.png)
 
-## Quick start (local)
+## Quick start
 
-```bash
-# first run creates a virtualenv and installs dependencies
-./run.sh /path/to/your/bam/directory
-
-# subsequent runs skip the install step
-./run.sh /path/to/your/bam/directory 9000   # optional custom port
-```
-
-Then open [http://localhost:8080](http://localhost:8080) in your browser.
-
-Your files stay on the server. IGV.js streams just the bytes it needs 
-using HTTP range requests, so even multi-gigabyte BAMs load quickly.
-
-## Quick start (remote server)
-
-If your BAMs live on a Linux server you can SSH into,
-just pass the remote path directly. One command from your laptop:
+If your BAMs live on a remote server you can SSH into,
+one command from your laptop:
 
 ```bash
 ./run.sh user@yourserver:/data/bams
 ```
 
-That's it. This deploys the server, sets up an SSH tunnel,
-and opens everything on `http://localhost:8080`. Ctrl+C to stop.
+That's it. This copies the server over, starts it, tunnels the port,
+and opens your browser. Ctrl+C to stop.
+
+The remote only needs Python 3 and SSH access.
+
+If you need an SSH key:
+
+```bash
+./run.sh -i ~/.ssh/my_key.pem user@yourserver:/data/bams
+```
+
+To avoid typing the key path every time:
+
+```bash
+export REMOTEIGV_SSH_OPTS="-i ~/.ssh/my_key.pem"
+./run.sh user@yourserver:/data/bams
+```
 
 Custom port:
 
 ```bash
 ./run.sh user@yourserver:/data/bams 9999
-# then open http://localhost:9999
 ```
 
-The remote only needs Python 3 and SSH access.
-remoteIGV copies itself over automatically.
+## Local mode
+
+If your BAMs are already on your machine:
+
+```bash
+./run.sh /path/to/your/bam/directory
+```
+
+All BAM/CRAM files with indexes are loaded automatically.
+IGV.js streams just the bytes it needs via HTTP range requests,
+so even multi-gigabyte BAMs load quickly.
 
 ## What you'll see
 
@@ -55,9 +63,9 @@ The browser opens with two genome-wide annotation tracks loaded automatically:
 
 These are streamed directly from UCSC, so they work at any locus with no setup.
 
-Your own files (BAMs, BEDs, VCFs, etc.) appear in the **Add track** dropdown. 
-Select a file and click **+ Add** to load it. 
-You can also type a gene name or coordinates into the **Region** box and press Enter to navigate.
+All BAM/CRAM files with indexes are loaded automatically.
+Additional files appear in the **Add track** dropdown.
+Type a gene name or coordinates into the **Region** box and press Enter to navigate.
 
 ## Supported file types
 

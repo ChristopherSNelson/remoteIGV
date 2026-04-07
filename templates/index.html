@@ -182,25 +182,49 @@ async function loadFileList() {
   }
 }
 
-// ── auto-load small tracks on startup (skip large BAMs/CRAMs) ─
+// ── auto-load tracks on startup ───────────────────────────────
+// Load all BAM/CRAM files plus small annotation tracks.
 // Skip files that duplicate the built-in UCSC annotation tracks.
 const SKIP_AUTO = /encode_ccres|mane_select|phyloP100way/i;
 
 async function autoLoadTracks() {
-  const SIZE_LIMIT = 5 * 1e6; // 5 MB — skip anything larger
+  const ANNOTATION_SIZE_LIMIT = 5 * 1e6; // 5 MB for non-alignment files
   for (const f of allFiles) {
     if (/\.(bai|crai|csi|tbi|idx)$/i.test(f.name)) continue;
-    if (/\.(bam|cram)$/i.test(f.name) && f.size > SIZE_LIMIT) continue;
     if (SKIP_AUTO.test(f.name)) continue;
+    // Always load BAM/CRAM (that's why you're here), size-limit annotations only
+    const isAlignment = /\.(bam|cram)$/i.test(f.name);
+    if (!isAlignment && f.size > ANNOTATION_SIZE_LIMIT) continue;
     await addTrackByPath(f.path);
   }
+}
+
+// ── track naming ──────────────────────────────────────────────
+// Build a short, unique display name from a relative file path.
+// If multiple files share the same filename, walk up parent dirs
+// until the names are unique.
+function shortTrackName(filePath) {
+  const parts = filePath.split('/');
+  const filename = parts[parts.length - 1];
+
+  // Count how many loaded files share this filename
+  const dupes = allFiles.filter(f => f.path.endsWith('/' + filename) || f.path === filename);
+  if (dupes.length <= 1) return filename;
+
+  // Walk up parent dirs until we have a unique name
+  for (let depth = 2; depth <= parts.length; depth++) {
+    const candidate = parts.slice(parts.length - depth).join('/');
+    const others = dupes.filter(f => f.path.endsWith(candidate));
+    if (others.length <= 1) return candidate;
+  }
+  return filePath;
 }
 
 // ── track loading ─────────────────────────────────────────────
 function buildTrackConfig(filePath) {
   const url = '/data/' + filePath;
   const lower = filePath.toLowerCase();
-  const name = filePath.split('/').pop();
+  const name = shortTrackName(filePath);
   const config = { name, url };
 
   if (lower.endsWith('.bam')) {
