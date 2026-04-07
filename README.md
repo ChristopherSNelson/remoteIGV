@@ -50,18 +50,18 @@ If your BAMs are already on your machine:
 ./run.sh /path/to/your/bam/directory
 ```
 
-All BAM/CRAM files with indexes are loaded automatically.
 IGV.js streams just the bytes it needs via HTTP range requests,
 so even multi-gigabyte BAMs load quickly.
 
 ## What you'll see
 
-The browser opens with two genome-wide annotation tracks loaded automatically:
+The browser opens with three annotation tracks loaded automatically:
 
+- **Refseq Genes** — gene models (top of view)
 - **ENCODE cCREs** — regulatory regions (promoters, enhancers, etc.)
 - **phyloP 100-way** — cross-species conservation scores
 
-These are streamed directly from UCSC, so they work at any locus with no setup.
+These are streamed directly from UCSC/IGV, so they work at any locus with no setup.
 
 All BAM/CRAM files with indexes are loaded automatically.
 Additional files appear in the **Add track** dropdown.
@@ -105,20 +105,14 @@ blobfuse2 mount /mnt/azdata --tmp-path /tmp/blobfuse
 
 ### HPC / shared filesystems
 
-If your BAMs already live on a shared filesystem (NFS, Lustre, GPFS), 
-just point the server at them . No mounting needed:
+If your BAMs already live on a shared filesystem (NFS, Lustre, GPFS):
 
 ```bash
-# on an HPC login or interactive node
-./run.sh /shared/lab/genomics 8080
-
-# from your laptop, tunnel through the login node
-ssh -N -L 8080:localhost:8080 hpc-login
+./run.sh user@hpc-login:/shared/lab/genomics
 ```
 
-If your HPC doesn't allow long-running processes on login nodes, 
-request an interactive session or submit a job that 
-runs `run.sh` and note the compute node hostname for the SSH tunnel.
+If your HPC doesn't allow long-running processes on login nodes,
+request an interactive session first.
 
 ### Docker
 
