@@ -1,34 +1,33 @@
-# remoteIGV — Session Handoff (2026-03-17)
+# remoteIGV - Session Handoff (2026-04-06)
 
 ## What was done this session
 
-- Set up GitHub remote and pushed repo to https://github.com/ChristopherSNelson/remoteIGV (public)
-- Committed pending changes: S3 remount on restart, multisample 1000G streaming, light UI theme
-- Added MIT license
-- Added GCP/Azure/HPC/Docker deployment docs to README
-- Updated annotation track list in README (removed MANE Select reference)
-- Chris edited README formatting (line wrapping, wording tweaks)
-- Updated Screenshot.png to new light theme (full UI with toolbar)
-- Added templates/igv_screenshot.png (IGV-only panel view)
-- Updated .gitignore to allow the two screenshot PNGs
-- Downloaded test BAM (HG002 chr11) to local testdata/ for screenshot capture
-- Ran local server on port 8080 for screenshot — may still be running (PID 2280)
+- Added remote mode to `run.sh`: `./run.sh [-i key] user@host:/path` auto-deploys server, sets up SSH tunnel, opens browser
+- Fixed Starlette `TemplateResponse` compatibility (newer API changed signature)
+- Pinned dependency versions in `requirements.txt`
+- Added port collision recovery (kills stale server before starting)
+- Added `REMOTEIGV_SSH_OPTS` env var for default SSH key
+- Auto-open browser on launch (suppressed on headless remotes via `REMOTEIGV_NO_OPEN`)
+- Auto-load all BAM/CRAM files with indexes on startup (not just small files)
+- Skip unindexed BAM/CRAM from file listing (IGV can't use them)
+- Smart track naming: walks up parent dirs when filenames collide
+- Gene model track now renders on top (switched from `genome: "hg38"` to explicit `reference` config)
+- README rewritten: remote-first, documents SSH key options, simplified HPC section
+- Tested live against Jurkat T cell ribo-seq/RNA-seq BAMs on AWS EFS
 
-## What's left / next steps (priority order)
+## Next steps (priority order)
 
-1. **Upload Screenshot.png as GitHub social preview** — Settings → Social preview → Edit (1280x640 ideal)
-2. **Post to LinkedIn** — draft message ready in conversation
-3. **Kill local server** if still running: `kill 2280` or `lsof -i :8080`
-4. **Clean up testdata/** — local test BAM not committed, can delete: `rm -rf testdata/`
-5. **AWS teardown** — resources were torn down prior to this session
-6. **Multi-browser testing** — only tested in Firefox so far
-7. **Future: variant-centric review, bookmarks/notes** (see CLAUDE.md)
+1. Track naming could be shorter - consider stripping common suffixes like `align_star/Aligned.sortedByCoord.out.bam`
+2. UI blocks while auto-loading many BAMs over SSH - consider loading tracks in parallel or showing a progress indicator
+3. Variant-centric review (load VCF, click variant, navigate BAMs)
+4. Bookmarks and notes
 
 ## Key decisions
 
-- Made repo **public** on GitHub (MIT license) — Chris wants to share with team and LinkedIn
-- README now highlights cloud-agnostic nature — GCP (gcsfuse), Azure (blobfuse2), HPC (NFS/Lustre), Docker all documented
-- Screenshot.png = full UI with toolbar (for social preview / README); templates/igv_screenshot.png = IGV panel only
+- Used `reference` config instead of `genome: "hg38"` to control gene track ordering (avoids duplicate gene track)
+- Auto-load all BAMs regardless of size since that's the primary use case
+- SSH options parsed as CLI flags before the data dir argument, plus env var fallback
+- Remote cleanup kills server process on exit to prevent port collision on next run
 
 ## Current blockers
 
