@@ -26,39 +26,25 @@ using HTTP range requests, so even multi-gigabyte BAMs load quickly.
 
 ## Quick start (remote server)
 
-If your BAMs live on a Linux server (e.g. a shared compute node), 
-you can run remoteIGV there and view it from your laptop.
+If your BAMs live on a Linux server you can SSH into,
+just pass the remote path directly. One command from your laptop:
 
 ```bash
-# on the remote server
-ssh yourserver
-cd /path/to/remoteIGV
-./run.sh /data/bams 8080
+./run.sh user@yourserver:/data/bams
 ```
 
-Then from your laptop, set up an SSH tunnel:
+That's it. This deploys the server, sets up an SSH tunnel,
+and opens everything on `http://localhost:8080`. Ctrl+C to stop.
+
+Custom port:
 
 ```bash
-ssh -N -L 8080:localhost:8080 yourserver
-```
-
-Open [http://localhost:8080](http://localhost:8080) on your laptop. 
-You're now browsing BAMs that live on the serve,
-so nothing gets downloaded to your machine.
-
-The `-N` flag means "don't open a shell, just forward the port." 
-Close it with Ctrl+C when you're done.
-
-If port 8080 is already taken on either end, pick any other port:
-
-```bash
-# server side
-./run.sh /data/bams 9999
-
-# laptop side
-ssh -N -L 9999:localhost:9999 yourserver
+./run.sh user@yourserver:/data/bams 9999
 # then open http://localhost:9999
 ```
+
+The remote only needs Python 3 and SSH access.
+remoteIGV copies itself over automatically.
 
 ## What you'll see
 

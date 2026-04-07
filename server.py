@@ -77,17 +77,26 @@ def _parse_range(range_header: str, file_size: int):
 
 @app.get("/", response_class=HTMLResponse)
 async def index(request: Request):
-    return templates.TemplateResponse("index.html", {"request": request})
+    return templates.TemplateResponse(request, "index.html")
 
 
 @app.get("/api/files")
 async def list_files():
     """Return a tree of servable alignment / track files."""
+    INDEX_FOR = {".bam": ".bai", ".cram": ".crai"}
     files = []
     for p in sorted(DATA_DIR.rglob("*")):
-        if p.is_file() and _has_allowed_ext(p.name):
-            rel = str(p.relative_to(DATA_DIR))
-            files.append({"path": rel, "name": p.name, "size": p.stat().st_size})
+        if not p.is_file() or not _has_allowed_ext(p.name):
+            continue
+        # Skip BAM/CRAM files that have no index - IGV can't use them
+        suffix = p.suffix.lower()
+        if suffix in INDEX_FOR:
+            idx_ext = INDEX_FOR[suffix]
+            if not p.with_suffix(p.suffix + idx_ext).exists() \
+               and not p.parent.joinpath(p.stem + idx_ext).exists():
+                continue
+        rel = str(p.relative_to(DATA_DIR))
+        files.append({"path": rel, "name": p.name, "size": p.stat().st_size})
     return JSONResponse(files)
 
 
