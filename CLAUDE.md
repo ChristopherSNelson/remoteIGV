@@ -7,7 +7,9 @@ Lightweight web genome browser wrapping IGV.js. Python/FastAPI backend serves BA
 - `server.py` — FastAPI server, serves files from `--data-dir` with byte-range support
 - `templates/index.html` — single-page frontend, loads IGV.js from CDN
 - `aws/` — scripts to deploy on EC2 with S3 mount via mountpoint-s3
-- Genome-wide annotation tracks (ENCODE cCREs, MANE Select, phyloP) are streamed directly from UCSC bigBed/bigWig URLs — not hosted locally
+- Genome-wide annotation tracks (Refseq Genes, ENCODE cCREs, phyloP) are streamed directly from UCSC/IGV URLs - not hosted locally
+- `run.sh` supports remote mode: `./run.sh user@host:/path` auto-deploys, tunnels, and opens browser
+- Uses explicit `reference` config (not `genome: "hg38"`) to control track ordering
 
 ## Lessons
 
